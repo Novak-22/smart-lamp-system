@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.openclaw.ai)",
+      "Bash(openclaw gateway:*)",
+      "Bash(openclaw devices:*)",
+      "Bash(openclaw tui:*)",
+      "Bash(openclaw models:*)",
+      "Bash(node:*)",
+      "Bash(OPENCLAW_GATEWAY_TOKEN=\"56c8827150ad41941620eaf565479aecbf2d967aa2a71f61\" node --input-type=module <<'EOF'\nimport { openclawClient } from '/Users/caohanyang/Downloads/smart-lamp-system/src/utils/openclaw.js'\nconst res = await openclawClient.sendMessage\\('连通性测试，请回复ok'\\)\nconsole.log\\(JSON.stringify\\(res, null, 2\\)\\)\nEOF)",
+      "Read(//Users/caohanyang/.openclaw/**)",
+      "Read(//Users/caohanyang/**)",
+      "Bash(gh auth:*)"
+    ]
+  }
+}
