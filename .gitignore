@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# macOS
+.DS_Store
+
+# Claude
+.claude/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local

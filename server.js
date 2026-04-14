@@ -3,12 +3,63 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { readFileSync } from 'fs'
+import mqtt from 'mqtt'
+import { randomUUID } from 'crypto'
 
 // 导入工具模块
 import { camera } from './src/utils/camera.js'
 import { detector } from './src/utils/detector.js'
 import { voice } from './src/utils/voice.js'
 import { history } from './src/utils/history.js'
+
+// ==================== 智能台灯 MQTT 配置 ====================
+const LAMP_AUTH_TOKEN = process.env.SMART_LAMP_AUTH_TOKEN || 'eyJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJMSUdIVF9BUFAiLCJzdWIiOm51bGwsInJvbGUiOiJVU0VSIiwiaGVhZEltZyI6bnVsbCwiY3JlYXRlZCI6MTc3NTUzOTY1MTA2MSwic291cmNlIjoiQVBQIiwidmVyc2lvbiI6MzcyMDMzMzcwMjQ4NzAxNTQyNSwibmFtZSI6bnVsbCwiaWQiOiI0ODMxNDIzNzI1ODQzMzQ1ODY0IiwidXNlclR5cGUiOiJVU0VSIiwiZW5jIjp0cnVlLCJleHAiOjE3NzYxNDQ0NTEsInN0YXR1cyI6IkFDVElWRSJ9.acOBmrCc0RfJEXzPUBXuIlGLkQG5y5eFLV_36_rx-32Qmz4BJi6RY_HBypApe5SGHpc4xJ06gnFSpxwefjczkQ';
+const LAMP_DEVICE_ID = 'SCCHI-f8e19ced467d77a1eba05f4246e2f8cc';
+const LAMP_SIGNAL_TOPIC = `senselink/company/1/device/${LAMP_DEVICE_ID}/signal`;
+const LAMP_URL = `wss://sensejupiter-test.sensetime.com/mqtt4?authToken=${encodeURIComponent(LAMP_AUTH_TOKEN)}`;
+
+// 台灯状态（内存中维护）
+let lampBrightness = 2;   // 0-4
+let lampTemperature = 5;  // 0-10
+let lampVolume = 5;        // 0-10
+let lampIsOn = false;
+
+// MQTT 客户端（单例）
+let mqttClient = null;
+
+function getMqttClient() {
+  if (!mqttClient) {
+    mqttClient = mqtt.connect(LAMP_URL, {
+      protocolId: 'MQTT',
+      protocolVersion: 4,
+      connectTimeout: 10000,
+      keepalive: 30,
+      clean: true,
+      clientId: `lamp_server_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      rejectUnauthorized: false,
+    });
+    mqttClient.on('error', (err) => console.error('[Lamp MQTT] error:', err.message));
+  }
+  return mqttClient;
+}
+
+function buildLampMsg(event, value) {
+  return {
+    timestamp: Math.floor(Date.now() / 1000),
+    seq: randomUUID(),
+    signal: 7,
+    data: { event, value }
+  };
+}
+
+function publishLamp(msg) {
+  return new Promise((resolve, reject) => {
+    getMqttClient().publish(LAMP_SIGNAL_TOPIC, JSON.stringify(msg), { qos: 1 }, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -28,6 +79,122 @@ app.use((req, res, next) => {
 })
 
 // ==================== API 路由 ====================
+
+// ==================== 智能台灯 API ====================
+
+// GET /api/lamp/status - 获取台灯状态
+app.get('/api/lamp/status', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      isOn: lampIsOn,
+      brightness: lampBrightness,
+      temperature: lampTemperature,
+      volume: lampVolume,
+      brightnessRange: [0, 4],
+      temperatureRange: [0, 10],
+      volumeRange: [0, 10]
+    }
+  });
+});
+
+// POST /api/lamp/switch - 开关灯
+app.post('/api/lamp/switch', async (req, res) => {
+  const { on } = req.body;
+  const value = on ? 1 : 0;
+  lampIsOn = !!on;
+
+  try {
+    await publishLamp(buildLampMsg('switch_device_onoff', value));
+    res.json({ success: true, message: on ? '灯已打开' : '灯已关闭', isOn: lampIsOn });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/lamp/brightness - 调节亮度
+app.post('/api/lamp/brightness', async (req, res) => {
+  const { action, value, temperature } = req.body;
+
+  if (action === 'up') {
+    lampBrightness = Math.min(4, lampBrightness + 1);
+  } else if (action === 'down') {
+    lampBrightness = Math.max(0, lampBrightness - 1);
+  } else if (action === 'set') {
+    lampBrightness = Math.max(0, Math.min(4, parseInt(value, 10) || 0));
+  } else {
+    return res.status(400).json({ success: false, error: 'action must be: up, down, set' });
+  }
+
+  if (temperature !== undefined) {
+    lampTemperature = Math.max(0, Math.min(10, parseInt(temperature, 10)));
+  }
+
+  try {
+    await publishLamp(buildLampMsg('adjust_brightness', {
+      brightness_mode: 1,
+      brightness: lampBrightness,
+      temperature: lampTemperature
+    }));
+    res.json({
+      success: true,
+      message: `亮度已调整为 ${lampBrightness}`,
+      brightness: lampBrightness,
+      temperature: lampTemperature
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/lamp/temperature - 调节色温
+app.post('/api/lamp/temperature', async (req, res) => {
+  const { value } = req.body;
+  lampTemperature = Math.max(0, Math.min(10, parseInt(value, 10) || 0));
+
+  try {
+    await publishLamp(buildLampMsg('adjust_brightness', {
+      brightness_mode: 1,
+      brightness: lampBrightness,
+      temperature: lampTemperature
+    }));
+    res.json({
+      success: true,
+      message: `色温已调整为 ${lampTemperature}`,
+      temperature: lampTemperature
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/lamp/volume - 调节音量
+app.post('/api/lamp/volume', async (req, res) => {
+  const { action, value } = req.body;
+
+  if (action === 'up') {
+    lampVolume = Math.min(10, lampVolume + 1);
+  } else if (action === 'down') {
+    lampVolume = Math.max(0, lampVolume - 1);
+  } else if (action === 'set') {
+    lampVolume = Math.max(0, Math.min(10, parseInt(value, 10) || 0));
+  } else {
+    return res.status(400).json({ success: false, error: 'action must be: up, down, set' });
+  }
+
+  try {
+    await publishLamp(buildLampMsg('adjust_volume', lampVolume));
+    res.json({
+      success: true,
+      message: `音量已调整为 ${lampVolume}`,
+      volume: lampVolume
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==================== 原有 API ====================
 
 // 健康检查
 app.get('/health', (req, res) => {

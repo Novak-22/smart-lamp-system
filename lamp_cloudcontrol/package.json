@@ -1,0 +1,13 @@
+{
+  "name": "lamp-cloudcontrol",
+  "version": "1.0.0",
+  "description": "智能台灯云控制服务 - 对外提供HTTP接口控制台灯",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mqtt": "^5.15.1"
+  }
+}
