@@ -5,16 +5,19 @@
 ## 架构
 
 ```
-OpenClaw              CloudControl Server         SenseRobot Cloud
-(WhatsApp/         --->  (本项目 :3001)        --->  (sensejupiter-test
- Feishu)                                            .sensetime.com)
-     │                      │                           │
-     │                      v                           v
-     │               +------------+             +------------+
-     │               |  Web UI    |             | Smart Lamp |
-     │               | (Monitor) |             | (Hardware) |
-     │               +------------+             +------------+
-     │                                              (MQTT Status)
++-----------------+    +------------------------+    +------------------------+
+|    OpenClaw     |    |  CloudControl Server   |    |  SenseRobot Cloud      |
+|  (WhatsApp /    | -- |    (本项目 :3001)       | -- |  (sensejupiter-test    |
+|    Feishu)      |    |                         |    |   .sensetime.com)      |
++-----------------+    +------------------------+    +------------------------+
+       |                         |                          |
+       |                         v                          v
+       |                  +--------------+          +--------------+
+       |                  |    Web UI     |          |  Smart Lamp  |
+       |                  |  (Monitor)   |          |  (Hardware)  |
+       |                  +--------------+          +--------------+
+       |                                                  |
+       +--------------------- (MQTT Status) <-------------+
 ```
 
 ## 核心职责
