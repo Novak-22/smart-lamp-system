@@ -9,7 +9,12 @@
 │   OpenClaw  │───▶│  CloudControl Server │───▶│  SenseRobot Cloud   │
 │  (WhatsApp/ │    │    (本项目 / 3001)    │    │  (sensejupiter-test │
 │   Feishu)   │    └──────────────────────┘    │   .sensetime.com)   │
-└─────────────┘                                   └─────────────────────┘
+└─────────────┘           │                      │                     │
+                          ▼                      ▼                     │
+                   ┌──────────────┐      ┌──────────────┐            │
+                   │  Web UI      │      │ Smart Lamp   │            │
+                   │  (Monitor)   │      │ (Hardware)   │◀───────────┘
+                   └──────────────┘      └──────────────┘   (MQTT Status)
 ```
 
 ## 核心职责
@@ -17,9 +22,10 @@
 本服务作为 **消息转发层**，不直接控制硬件，而是：
 
 1. **接收** OpenClaw 下发的任务指令（通过 HTTP API）
-2. **转发** 指令到 SenseRobot 云端（通过 MQTT）
+2. **转发** 指令到 SenseRobot 云端（通过 MQTT Signal）
 3. **接收** 设备端通过 MQTT 上报的 status 响应
-4. **返回** 响应结果给调用方
+4. **返回** 响应结果给调用方（部分 API 如 `/api/lamp/photo`）
+5. **提供** Web UI 用于状态监控
 
 ## API 接口
 
